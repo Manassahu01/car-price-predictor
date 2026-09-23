@@ -6,8 +6,9 @@ Run:
     streamlit run app.py
 
 Needs a "models/" folder produced by train_model.py (see that file's
-docstring). If it's missing, this app shows instructions instead of
-crashing.
+docstring), and the ".streamlit/config.toml" file next to this one for
+the color theme. If models/ is missing, this app shows instructions
+instead of crashing.
 """
 
 import json
@@ -23,61 +24,88 @@ MODEL_DIR = Path("models")
 
 st.set_page_config(
     page_title="Car Price Predictor",
-    page_icon="🚗",
+    page_icon="🎛️",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
 # --------------------------------------------------------------------------
 # Styling
+#
+# Colors, buttons, tabs, sliders, and input accents come from
+# .streamlit/config.toml (Streamlit's own theme system) — that's more
+# reliable across Streamlit versions than overriding internal CSS classes.
+# This block only adds the custom font and a couple of small, STATIC or
+# SINGLE-LINE HTML touches. Every dynamic (f-string) HTML snippet below is
+# built as one single line on purpose: Streamlit's markdown renderer can
+# misparse multi-line HTML that has Python-source indentation baked into
+# it, which is what caused literal "<div...>" text to show up before.
 # --------------------------------------------------------------------------
 st.markdown(
     """
     <style>
-        .main-header {
-            background: linear-gradient(135deg, #1a1f2e 0%, #0e1117 100%);
-            padding: 2rem 2rem 1.5rem 2rem;
-            border-radius: 16px;
-            border: 1px solid #2a2f3d;
-            margin-bottom: 1.5rem;
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap');
+
+        html, body, [data-testid="stAppViewContainer"] {
+            font-family: 'Sora', sans-serif;
         }
-        .main-header h1 {
-            font-size: 2.1rem;
-            margin-bottom: 0.2rem;
-            background: linear-gradient(90deg, #ff4b4b, #ff9f43);
+        [data-testid="stAppViewContainer"] * {
+            font-family: 'Sora', sans-serif;
+        }
+
+        [data-testid="stAppViewContainer"]::before {
+            content: "";
+            position: fixed;
+            top: -220px;
+            right: -180px;
+            width: 520px;
+            height: 520px;
+            background: radial-gradient(circle, rgba(124, 108, 245, 0.18) 0%, rgba(124, 108, 245, 0) 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .dial-header {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+            padding: 0.6rem 0 1.2rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            margin-bottom: 1.6rem;
+            position: relative;
+            z-index: 1;
+        }
+        .dial-header h1 {
+            font-size: 1.65rem;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: -0.01em;
+            background: linear-gradient(90deg, #e9e9f7 0%, #c4b5fd 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        .main-header p {
-            color: #9ca3af;
-            font-size: 1rem;
-            margin: 0;
+        .dial-header p {
+            color: #8f93ab;
+            font-size: 0.92rem;
+            margin: 0.15rem 0 0 0;
         }
-        .price-card {
-            background: linear-gradient(135deg, #1a2f2b 0%, #161b26 100%);
-            border: 1px solid rgba(45, 212, 191, 0.35);
-            border-radius: 16px;
-            padding: 1.8rem;
-            text-align: center;
-            margin-top: 0.5rem;
-        }
-        .price-card .label {
-            color: #9ca3af;
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-        }
-        .price-card .value {
-            font-size: 2.6rem;
+
+        .price-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 2.5rem;
             font-weight: 700;
-            color: #2dd4bf;
-            margin: 0.3rem 0;
+            color: #a78bfa;
+            text-shadow: 0 0 22px rgba(167, 139, 250, 0.35);
+            line-height: 1.15;
         }
-        div[data-testid="stMetric"] {
-            background-color: #161b26;
-            border: 1px solid #2a2f3d;
-            padding: 0.8rem 1rem;
-            border-radius: 12px;
+        .price-label {
+            color: #8f93ab;
+            font-size: 0.85rem;
+        }
+        .mono-caption {
+            font-family: 'JetBrains Mono', monospace;
+            color: #8f93ab;
+            font-size: 0.82rem;
         }
     </style>
     """,
@@ -115,13 +143,21 @@ def encode_input(raw: dict, encoders: dict, feature_columns: list) -> pd.DataFra
 
 
 # --------------------------------------------------------------------------
-# Header
+# Header (static content only — safe to keep as multi-line HTML)
 # --------------------------------------------------------------------------
 st.markdown(
     """
-    <div class="main-header">
-        <h1>🚗 Car Price Predictor</h1>
-        <p>Linear, Ridge &amp; Lasso Regression trained on used-car sales data</p>
+    <div class="dial-header">
+        <svg width="42" height="42" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M5 22 L7 15 Q8 13 10 13 H24 Q27 13 28 16 L30 22" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <path d="M4 22 H31" stroke="#a78bfa" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="10" cy="24" r="2.4" fill="#0a0d1f" stroke="#e9e9f7" stroke-width="1.6"/>
+            <circle cx="25" cy="24" r="2.4" fill="#0a0d1f" stroke="#e9e9f7" stroke-width="1.6"/>
+        </svg>
+        <div>
+            <h1>Car Price Predictor</h1>
+            <p>Estimate resale value with Linear, Ridge &amp; Lasso regression</p>
+        </div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -146,6 +182,7 @@ encoders = metadata["encoders"]
 feature_columns = metadata["feature_columns"]
 results = metadata["results"]
 ranges = metadata["numeric_ranges"]
+price_range = ranges.get("Price")
 model_names = tuple(results.keys())
 models = load_models(model_names)
 
@@ -157,7 +194,7 @@ tab_predict, tab_insights, tab_about = st.tabs(
 # Tab 1 — Predict
 # --------------------------------------------------------------------------
 with tab_predict:
-    col_form, col_result = st.columns([1.3, 1], gap="large")
+    col_form, col_result = st.columns([1.2, 1], gap="large")
 
     with col_form:
         st.subheader("Car details")
@@ -209,9 +246,16 @@ with tab_predict:
         )
 
     with col_result:
-        st.subheader("Estimated price")
-        if predict_clicked:
-            if model_choice not in models:
+        st.subheader("Readout")
+
+        with st.container(border=True):
+            if not predict_clicked:
+                st.markdown(
+                    '<div class="price-label">Predicted price</div>',
+                    unsafe_allow_html=True,
+                )
+                st.caption("Fill in the car details and press Predict price.")
+            elif model_choice not in models:
                 st.warning(f"Model file for '{model_choice}' is missing.")
             else:
                 raw = {
@@ -228,20 +272,32 @@ with tab_predict:
                 price = float(np.exp(log_price))
 
                 st.markdown(
-                    f"""
-                    <div class="price-card">
-                        <div class="label">Predicted price</div>
-                        <div class="value">${price:,.0f}</div>
-                    </div>
-                    """,
+                    '<div class="price-label">Predicted price</div>',
                     unsafe_allow_html=True,
                 )
-                st.caption(
-                    f"Estimated with **{model_choice}** "
-                    f"(test-set R² = {results[model_choice]['r2']:.3f})"
+                st.markdown(
+                    f'<div class="price-value">${price:,.0f}</div>',
+                    unsafe_allow_html=True,
                 )
-        else:
-            st.info("Fill in the car details and click **Predict price**.")
+
+                if price_range:
+                    lo, hi = price_range
+                    pct = 0.5 if hi == lo else max(0.0, min(1.0, (price - lo) / (hi - lo)))
+                    st.progress(pct)
+                    lbl_lo, lbl_hi = st.columns(2)
+                    lbl_lo.markdown(
+                        f'<span class="mono-caption">${lo:,.0f}</span>',
+                        unsafe_allow_html=True,
+                    )
+                    lbl_hi.markdown(
+                        f'<span class="mono-caption" style="float:right;">${hi:,.0f}</span>',
+                        unsafe_allow_html=True,
+                    )
+
+                st.divider()
+                m1, m2 = st.columns(2)
+                m1.metric("Model used", model_choice)
+                m2.metric("Test-set R²", f"{results[model_choice]['r2']:.3f}")
 
 # --------------------------------------------------------------------------
 # Tab 2 — Model Insights
@@ -255,6 +311,8 @@ with tab_insights:
             for k, v in results.items()
         ]
     )
+    # amber marks the strongest model, steel the middle, brake-red the weakest
+    bar_colors = ["#7c6cf5", "#8f93ab", "#f87171"][: len(comp_df)]
 
     c1, c2 = st.columns(2)
     with c1:
@@ -263,14 +321,14 @@ with tab_insights:
             x="Model",
             y="R2",
             color="Model",
-            color_discrete_sequence=["#ff4b4b", "#ff9f43", "#2dd4bf"],
+            color_discrete_sequence=bar_colors,
             text_auto=".3f",
         )
         fig_r2.update_layout(
             showlegend=False,
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
-            font_color="#e5e7eb",
+            font_color="#e9e9f7",
             yaxis_range=[0, 1],
             yaxis_title="R² score",
         )
@@ -292,7 +350,7 @@ with tab_insights:
             x="actual",
             y="predicted",
             labels={"actual": "Actual price ($)", "predicted": "Predicted price ($)"},
-            color_discrete_sequence=["#2dd4bf"],
+            color_discrete_sequence=["#a78bfa"],
             opacity=0.7,
         )
         max_val = max(sample["actual"].max(), sample["predicted"].max())
@@ -302,12 +360,12 @@ with tab_insights:
             y0=0,
             x1=max_val,
             y1=max_val,
-            line=dict(color="#ff4b4b", dash="dash"),
+            line=dict(color="#f87171", dash="dash"),
         )
         fig_scatter.update_layout(
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
-            font_color="#e5e7eb",
+            font_color="#e9e9f7",
         )
         st.plotly_chart(fig_scatter, use_container_width=True)
 
@@ -318,19 +376,19 @@ with tab_about:
     st.subheader("About this project")
     st.markdown(
         f"""
-        Predicts the price of a used car from its **brand, body type, mileage,
-        engine volume, engine type, registration status, and year**.
+Predicts the price of a used car from its brand, body type, mileage,
+engine volume, engine type, registration status, and year.
 
-        **Pipeline**
-        1. Drop rows missing `Price` or `EngineV`; remove `EngineV` outliers (> 10L)
-        2. Log-transform `Price` to fix the right-skew → `Log_price`
-        3. Label-encode the categorical columns (`Brand`, `Body`, `Engine Type`, `Registration`)
-        4. Train **Linear**, **Ridge**, and **Lasso** regression models
-        5. Predict `Log_price`, then reverse with `exp()` to get the price in dollars
+**Pipeline**
+1. Drop rows missing `Price` or `EngineV`; remove `EngineV` outliers (over 10L)
+2. Log-transform `Price` to fix the right-skew, giving `Log_price`
+3. Label-encode the categorical columns (`Brand`, `Body`, `Engine Type`, `Registration`)
+4. Train Linear, Ridge, and Lasso regression models
+5. Predict `Log_price`, then reverse it with `exp()` to get the price in dollars
 
-        **Best model on this training run:** {metadata['best_model']}
-        (R² = {results[metadata['best_model']]['r2']:.3f})
+Best model on this training run: **{metadata['best_model']}**
+(R² = {results[metadata['best_model']]['r2']:.3f})
 
-        Built with `scikit-learn`, `pandas`, and `Streamlit`.
-        """
+Built with scikit-learn, pandas, and Streamlit.
+"""
     )
