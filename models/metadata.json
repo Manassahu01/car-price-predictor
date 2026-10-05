@@ -1,0 +1,69 @@
+{
+  "feature_columns": [
+    "Brand",
+    "Body",
+    "Mileage",
+    "EngineV",
+    "Engine Type",
+    "Registration",
+    "Year"
+  ],
+  "encoders": {
+    "Brand": {
+      "Audi": 0,
+      "BMW": 1,
+      "Mercedes-Benz": 2,
+      "Mitsubishi": 3,
+      "Renault": 4,
+      "Toyota": 5,
+      "Volkswagen": 6
+    },
+    "Body": {
+      "crossover": 0,
+      "hatch": 1,
+      "other": 2,
+      "sedan": 3,
+      "vagon": 4,
+      "van": 5
+    },
+    "Engine Type": {
+      "Diesel": 0,
+      "Gas": 1,
+      "Other": 2,
+      "Petrol": 3
+    },
+    "Registration": {
+      "no": 0,
+      "yes": 1
+    }
+  },
+  "results": {
+    "Linear Regression": {
+      "r2": 0.8296300099596438,
+      "mae": 0.293996399585093
+    },
+    "Ridge Regression": {
+      "r2": 0.8296219243510856,
+      "mae": 0.29401951908556384
+    },
+    "Lasso Regression": {
+      "r2": 0.5138540511171468,
+      "mae": 0.5202253000225165
+    }
+  },
+  "best_model": "Linear Regression",
+  "numeric_ranges": {
+    "Mileage": [
+      0,
+      980
+    ],
+    "EngineV": [
+      0.6,
+      9.0
+    ],
+    "Year": [
+      1969,
+      2016
+    ]
+  }
+}
