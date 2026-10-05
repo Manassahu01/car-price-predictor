@@ -1,126 +1,120 @@
-# 🚗 Car Price Predictor
+# Car Price Predictor
 
-Predict the resale price of a used car with **Linear, Ridge, and Lasso Regression**, wrapped in an interactive Streamlit dashboard.
+End-to-end machine-learning project that estimates the asking price of a used car, with an honest evaluation, a calibrated price range, automated tests, and a deployed web app.
 
-![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white)
-![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B?logo=streamlit&logoColor=white)
-![scikit-learn](https://img.shields.io/badge/scikit--learn-ML-F7931E?logo=scikit-learn&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green)
+**Live demo:** https://manas-car-price-predictor.streamlit.app
 
----
+## Results
 
-## 📖 Overview
+Measured on 825 listings held out from training and never used for model selection:
 
-This project trains and compares three regression models on a real-world used-car sales dataset, then serves the best one through a clean, interactive web app. Enter a car's brand, body type, mileage, engine details, registration status, and year — get an instant price estimate, plus a look at how each model performs.
+| | Selected model (Gradient Boosting) | Naive baseline (always predict the median) |
+|---|---|---|
+| Typical error (median absolute % error) | **11.6%** | 54.0% |
+| Mean absolute error | **$3,033** | $11,771 |
+| R² (price) | **0.87** | -0.09 |
+| R² (log price) | **0.93** | 0.00 |
 
-**🔗 Live demo:** _add your Streamlit Cloud link here after deploying_
+Each prediction also comes with an approximate **80% range** (about -23% / +28% around the estimate). On the test set, 78.4% of real prices fell inside it, close to the 80% target.
 
-## 🎥 Preview
+![Model comparison](reports/figures/model_comparison.png)
 
-_Add a screenshot or screen recording of the app here once deployed, e.g.:_
+| Model | CV error (RMSLE) | Test MAE | Test median error | Test R² |
+|---|---|---|---|---|
+| Hist Gradient Boosting | **0.246** | $3,033 | 11.6% | 0.871 |
+| Random Forest | 0.248 | $2,742 | 11.0% | 0.895 |
+| Ridge | 0.284 | $3,814 | 14.0% | 0.751 |
+| ElasticNet | 0.285 | $3,821 | 13.7% | 0.749 |
+| Lasso | 0.285 | $3,821 | 13.9% | 0.749 |
+| Linear Regression | 0.286 | $3,861 | 13.9% | 0.746 |
+| Baseline (median) | 0.925 | $11,771 | 54.0% | -0.090 |
 
-```
-![App preview](assets/demo.png)
-```
+The model was selected by **cross-validated error on the training split only**. Gradient Boosting and Random Forest are statistically indistinguishable there (0.246 vs 0.248, with a standard deviation of about 0.015). Random Forest happens to score slightly better on the test set; the choice was deliberately **not** changed after looking at test results, because that would leak the test set into model selection.
 
-## ✨ Features
+### What drives the price
 
-- **Price prediction** from 7 car attributes, with a choice of model (Linear / Ridge / Lasso)
-- **Model Insights tab** — R² comparison chart and an actual-vs-predicted scatter plot
-- **Clean dark-themed dashboard** UI, built entirely in Streamlit
-- Robust to missing model files — shows setup instructions instead of crashing
+Re-training the model without each input (drop-column ablation, `experiments/feature_ablation.py`) shows how much the cross-validated error rises:
 
-## 🧠 How It Works
-
-1. **Data**: used-car sales records (brand, body type, mileage, engine volume, engine type, registration, year, price)
-2. **Cleaning**: drop rows missing `Price`/`EngineV`; remove `EngineV` outliers above 10L
-3. **Transform**: log-transform `Price` → `Log_price`, to correct its right-skew
-4. **Encode**: label-encode categorical columns (`Brand`, `Body`, `Engine Type`, `Registration`)
-5. **Train**: fit Linear, Ridge, and Lasso regression on an 80/20 train-test split
-6. **Predict**: model outputs `Log_price`; the app reverses it with `exp()` for the final price
-
-## 📊 Model Performance
-
-| Model | R² (test set) |
+| Input removed | Error increase |
 |---|---|
-| **Linear Regression** | **0.830** |
-| Ridge Regression | 0.830 |
-| Lasso Regression | 0.514 |
+| Year | +0.174 (by far the largest) |
+| Registration status | +0.073 |
+| Engine volume | +0.037 |
+| Brand | +0.032 |
+| Model name | +0.013 |
+| Body type | +0.005 |
+| Mileage | +0.001 |
+| Engine type | +0.000 |
 
-Linear and Ridge perform almost identically here — the data doesn't have strong multicollinearity for Ridge's regularization to meaningfully help. Lasso's default regularization strength shrinks several coefficients too aggressively for this feature set, which is why it trails behind; tuning its `alpha` (e.g. via `LassoCV`) would likely close some of that gap.
+Mileage adds little once the car's age is known, because the two are strongly related. The specific model name helps, but far less than year, registration or brand.
 
-## 🛠️ Tech Stack
+### Where it is weaker
 
-- **Python**, **Pandas**, **NumPy** — data handling
-- **scikit-learn** — model training and evaluation
-- **Streamlit** — web app UI
-- **Plotly** — interactive charts
-- **joblib** — model persistence
+Median error by brand (test set): Audi 7.6%, Toyota 9.2%, Renault 10.7%, Volkswagen 11.5%, Mitsubishi 11.5%, BMW 11.9%, **Mercedes-Benz 15.5%** (average error $5,845). Luxury cars have the widest price spread, so they are the hardest to predict.
 
-## 📁 Project Structure
+![Actual vs predicted](reports/figures/actual_vs_predicted.png)
+
+## What is different from a typical notebook project
+
+- **No leakage.** Imputation, scaling and encoding are fitted inside a scikit-learn `Pipeline` on training folds only. Duplicate listings are removed before splitting so the same car cannot appear in both train and test.
+- **No train/serve skew.** The same pipeline (including feature engineering) runs in training and in the app, so predictions on raw user input match what was evaluated.
+- **Correct encoding.** Categories are one-hot encoded, not label encoded. Label encoding would tell a linear model that Audi < BMW < Mercedes, an ordering that does not exist. Rare categories (fewer than 5 rows) are pooled, and unseen models do not crash the app.
+- **Real hyperparameter tuning.** Seven models are tuned with 5-fold cross-validation, including the regularised ones, plus a naive baseline to prove the models add value.
+- **Metrics that mean something.** Errors are reported in currency and percent, not just on a log scale.
+- **Data kept honest.** Expensive cars are not trimmed away as "outliers" (they are real listings, and trimming would flatter the metrics). Impossible engine volumes (for example 99.99 L) are treated as missing and imputed.
+- **Uncertainty, not just a number.** A prediction range is calibrated from out-of-fold errors and its coverage is checked on the test set.
+- **Tested.** 48 automated tests cover cleaning, feature engineering, leakage safeguards, input validation, sanity behaviour (newer cars cost more, lower mileage costs more, luxury brands cost more) and the model-loading fallback.
+- **Resilient deployment.** If the saved model cannot be loaded (for example after a scikit-learn upgrade), the app refits the chosen configuration from the CSV in a few seconds instead of crashing.
+
+### Compared with version 1 of this project
+
+Version 1 used label encoding, no tuning, and dropped the `Model` column. Its R² was measured on log price: Linear 0.830, Ridge 0.830, Lasso 0.514. On the same log-price measure, version 2 gives Linear 0.906, Ridge 0.906, tuned Lasso 0.906 and Gradient Boosting 0.927. Lasso's poor v1 score came from untuned regularisation strength, not from the method itself. Treat the comparison as indicative: version 2 also de-duplicates the data and keeps rows with missing engine volume, so the two evaluation sets are not identical.
+
+## Project structure
 
 ```
 car-price-predictor/
-├── app.py              # Streamlit app
-├── train_model.py       # Data pipeline + model training script
-├── requirements.txt      # Python dependencies
-├── models/               # Generated by train_model.py (not hand-written)
-│   ├── linear_regression.pkl
-│   ├── ridge_regression.pkl
-│   ├── lasso_regression.pkl
-│   ├── metadata.json
-│   └── sample_predictions.csv
-└── README.md
+├── app.py                    # Streamlit UI (thin layer over the package)
+├── car_price/
+│   ├── config.py             # paths, column names, constants
+│   ├── data.py               # loading, schema validation, cleaning
+│   ├── features.py           # feature engineering + preprocessing pipeline
+│   ├── models.py             # candidate models and tuning grids
+│   ├── evaluate.py           # metrics and report figures
+│   ├── train.py              # tune, select, evaluate, export
+│   └── predict.py            # input validation, loading, prediction + range
+├── experiments/
+│   └── feature_ablation.py   # drop-column ablation study
+├── tests/                    # 48 automated tests
+├── data/raw/car_data.csv     # source data
+├── models/                   # trained model + metadata.json
+├── reports/                  # model_comparison.csv, feature_ablation.csv, figures/
+├── .github/workflows/ci.yml  # runs the tests on every push
+├── MODEL_CARD.md
+└── requirements.txt
 ```
 
-## 🚀 Getting Started
+## Run it yourself
 
-### 1. Clone the repo
 ```bash
-git clone https://github.com/<your-username>/car-price-predictor.git
-cd car-price-predictor
+pip install -r requirements-dev.txt
+python -m car_price.train        # retrains everything (about 4 minutes on one CPU)
+python -m pytest                 # runs the tests
+streamlit run app.py             # starts the app
 ```
 
-### 2. Install dependencies
-```bash
-pip install -r requirements.txt
-```
+The repository already contains a trained model, so `streamlit run app.py` works immediately after installing the requirements.
 
-### 3. Get the trained models
-The `models/` folder isn't hand-written — it's generated by `train_model.py`, which needs the dataset (loaded via `kagglehub`, or a local `car_data.csv`). See the comments at the top of `train_model.py` for both options.
+## Data
 
-### 4. Run the app
-```bash
-python -m streamlit run app.py
-```
-Open the local URL Streamlit prints (usually `http://localhost:8501`).
+Used-car listings (7 brands, 312 models, years 1969-2016) from the Kaggle dataset `smritisingh1997/car-salescsv` ("1.04. Real-life example"). After removing 73 duplicate rows and 149 rows without a price, 4,123 listings remain. The source does not state the currency or the mileage unit; USD and thousands of km are assumed. Check the dataset's license on Kaggle before redistributing it.
 
-## 🌐 Deployment
+See [MODEL_CARD.md](MODEL_CARD.md) for intended use and limitations.
 
-Deployed on **Streamlit Community Cloud**:
-1. Push this repo to GitHub (including the `models/` folder).
-2. Go to [share.streamlit.io](https://share.streamlit.io) → New app → select this repo.
-3. Set the main file to `app.py` → Deploy.
+## Author
 
-## 📈 Possible Improvements
+Manas Sahu
 
-- Cross-validate Ridge/Lasso `alpha` instead of using scikit-learn defaults
-- Try tree-based models (Random Forest, XGBoost) for comparison
-- Add engineered features (car age, mileage-per-year)
-- Add basic input validation and unit tests
+## License
 
-## 🙋 Author
-
-**Manas**
-Data Analyst / Data Scientist (aspiring) — Python · SQL · Power BI · Machine Learning
-
-- GitHub: _add your profile link_
-- LinkedIn: _add your profile link_
-
-## 📄 License
-
-This project is licensed under the MIT License — feel free to use it as a learning reference.
-
----
-
-_Dataset: used-car sales data ("Real-life example" dataset), sourced via Kaggle._
+MIT
